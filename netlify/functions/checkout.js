@@ -4,39 +4,42 @@ import Stripe from "stripe";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export async function handler(event) {
-  try {
-    const headers = {
-      "Access-Control-Allow-Origin": "*", // allow all origins
-      "Access-Control-Allow-Headers": "Content-Type",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  // ✅ Handle CORS preflight
+  if (event.httpMethod === "OPTIONS") {
+    return {
+      statusCode: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+      body: "",
     };
+  }
 
-    // Handle preflight OPTIONS request
-    if (event.httpMethod === "OPTIONS") {
-      return { statusCode: 200, headers, body: "OK" };
-    }
-
+  try {
     const params = event.queryStringParameters;
-    const { productId, memberId } = params;
+    const productId = params.productId;
+    const memberId = params.memberId;
 
     if (!productId || !memberId) {
       return {
         statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: "Missing productId or memberId" }),
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({ error: "productId and memberId are required" }),
       };
     }
 
-    // Fetch product from Stripe
+    // 1. Fetch product details from Stripe
     const product = await stripe.products.retrieve(productId, {
       expand: ["default_price"],
     });
 
-    if (!product.default_price) {
+    if (!product) {
       return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: "Product has no default_price" }),
+        statusCode: 404,
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({ error: "Product not found" }),
       };
     }
 
@@ -45,22 +48,36 @@ export async function handler(event) {
         ? product.default_price
         : product.default_price.id;
 
-    // Create checkout session
+    // 2. Extract points from metadata
+    const pointsAwarded = product.metadata?.points_awarded || "0";
+
+    // 3. Create checkout session
     const session = await stripe.checkout.sessions.create({
-      mode:
-        product.default_price?.type === "recurring"
-          ? "subscription"
-          : "payment",
-      line_items: [{ price: priceId, quantity: 1 }],
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
       success_url:
-        "https://yourdomain.com/success?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "https://yourdomain.com/cancel",
-      metadata: { memberId, productId },
+        "https://yoursite.netlify.app/success?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://yoursite.netlify.app/cancel",
+      metadata: {
+        memberId: memberId,
+        productId: productId,
+        points_awarded: pointsAwarded,
+        event_id: product.metadata?.event_id || "",
+        event_name: product.metadata?.event_name || "",
+      },
     });
 
     return {
       statusCode: 200,
-      headers,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+      },
       body: JSON.stringify({ url: session.url }),
     };
   } catch (err) {
