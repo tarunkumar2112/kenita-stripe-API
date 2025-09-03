@@ -48,10 +48,13 @@ export async function handler(event) {
         ? product.default_price
         : product.default_price.id;
 
-    // 2. Extract points from metadata
+    // 2. Extract points from metadata (fallback to 0)
     const pointsAwarded = product.metadata?.points_awarded || "0";
 
-    // 3. Create checkout session
+    // 3. Get event name (fallback to product name)
+    const eventName = product.metadata?.event_name || product.name || "";
+
+    // 4. Create checkout session
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -69,7 +72,7 @@ export async function handler(event) {
         productId: productId,
         points_awarded: pointsAwarded,
         event_id: product.metadata?.event_id || "",
-        event_name: product.metadata?.event_name || "",
+        event_name: eventName,
       },
     });
 
