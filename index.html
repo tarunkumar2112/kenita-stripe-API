@@ -1,0 +1,156 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Test Stripe Checkout</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding: 20px; max-width: 720px; margin: auto; }
+    h1 { margin-bottom: 6px; }
+    .product { border: 1px solid #eee; padding: 12px; border-radius: 8px; margin-bottom: 10px; display:flex; align-items:center; gap:12px; }
+    .product img { width:80px; height:80px; object-fit:cover; border-radius:6px; background:#fafafa; }
+    .meta { flex: 1; }
+    .price { font-weight:700; font-size:16px; }
+    label { display:block; margin-top: 12px; }
+    input[type="text"] { width:100%; padding:8px; border-radius:6px; border:1px solid #ddd; }
+    button { margin-top:10px; padding:10px 14px; border-radius:8px; background:#111827; color:white; border:none; cursor:pointer; }
+    .note { color:#666; font-size:13px; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <h1>Test Checkout</h1>
+  <p class="note">This page lists products from <code>/.netlify/functions/products</code>. Choose one, enter a memberId and click Buy.</p>
+
+  <div id="products"></div>
+
+  <label>Member ID (memberstack id or test id)
+    <input id="memberId" type="text" placeholder="gwydasg" value="gwydasg" />
+  </label>
+
+  <div style="margin-top:8px;">
+    <button id="refresh">Refresh Products</button>
+  </div>
+
+  <div id="status" style="margin-top:12px;color:#111827;"></div>
+
+<script>
+(async function(){
+  const productsEl = document.getElementById('products');
+  const statusEl = document.getElementById('status');
+  const memberInput = document.getElementById('memberId');
+  const refreshBtn = document.getElementById('refresh');
+
+  // Helper to format price from smallest currency unit
+  function formatPrice(unit_amount, currency) {
+    if (unit_amount == null) return '—';
+    // unit_amount (e.g. 12000) and currency (e.g. gbp). We'll show with 2 decimals.
+    const amount = Number(unit_amount) / 100;
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: (currency || 'USD').toUpperCase() }).format(amount);
+  }
+
+  async function loadProducts() {
+    statusEl.textContent = 'Loading products…';
+    productsEl.innerHTML = '';
+    try {
+      const res = await fetch('/.netlify/functions/products', { method: 'GET' });
+      if (!res.ok) throw new Error('Failed to fetch products: ' + res.status);
+      const data = await res.json();
+
+      // Data might be the full Stripe list object, or an object with .products field
+      const list = data?.data ?? data?.products ?? null;
+      if (!list || !Array.isArray(list)) {
+        console.warn('Unexpected products response', data);
+        productsEl.innerHTML = '<div style="color:crimson">Unexpected products format. See console.</div>';
+        console.log(data);
+        statusEl.textContent = '';
+        return;
+      }
+
+      list.forEach(prod => {
+        // default_price may be object or id; check both
+        const dprice = prod.default_price;
+        let priceId = null;
+        let unit_amount = null;
+        let currency = null;
+        let recurring = null;
+
+        if (dprice) {
+          if (typeof dprice === 'string') {
+            priceId = dprice;
+          } else {
+            priceId = dprice.id;
+            unit_amount = dprice.unit_amount;
+            currency = dprice.currency;
+            recurring = dprice.recurring?.interval ?? null;
+          }
+        }
+
+        const card = document.createElement('div');
+        card.className = 'product';
+        card.innerHTML = `
+          <img src="${(prod.images && prod.images[0]) || ''}" onerror="this.style.display='none'"/>
+          <div class="meta">
+            <div><strong>${prod.name || '(no name)'}</strong></div>
+            <div style="color:#666; font-size:13px; margin-top:6px;">${prod.description || ''}</div>
+            <div style="margin-top:6px;" class="price">${formatPrice(unit_amount, currency)} ${recurring ? '/ ' + recurring : ''}</div>
+            <div style="margin-top:6px; font-size:12px; color:#444">
+              <span>Product ID: <code>${prod.id}</code></span><br/>
+              <span>Price ID: <code>${priceId || 'N/A'}</code></span>
+            </div>
+          </div>
+          <div>
+            <button data-prod="${prod.id}" data-price="${priceId}">Buy</button>
+          </div>
+        `;
+        productsEl.appendChild(card);
+      });
+
+      // attach buy button listeners
+      Array.from(productsEl.querySelectorAll('button[data-prod]')).forEach(btn=>{
+        btn.addEventListener('click', async (e) => {
+          const productId = btn.getAttribute('data-prod');
+          const memberId = (memberInput.value || '').trim();
+          if (!memberId) {
+            alert('Please enter memberId');
+            return;
+          }
+          // Optional: confirm
+          if (!confirm('Proceed to checkout for product ' + productId + ' as member ' + memberId + '?')) return;
+
+          statusEl.textContent = 'Creating checkout session…';
+          try {
+            // Call checkout endpoint (GET with query params)
+            const url = `/.netlify/functions/checkout?productId=${encodeURIComponent(productId)}&memberId=${encodeURIComponent(memberId)}`;
+            const res = await fetch(url, { method: 'GET' });
+            if (!res.ok) {
+              const err = await res.text();
+              throw new Error('Checkout endpoint error: ' + res.status + ' ' + err);
+            }
+            const payload = await res.json();
+            if (!payload.url) throw new Error('No session URL returned: ' + JSON.stringify(payload));
+            // Redirect user to Stripe checkout
+            window.location.href = payload.url;
+          } catch (err) {
+            console.error(err);
+            statusEl.textContent = 'Error: ' + (err.message || err);
+            alert('Error creating checkout session. See console.');
+          }
+        });
+      });
+
+      statusEl.textContent = 'Products loaded.';
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = 'Failed to load products: ' + err.message;
+    }
+  }
+
+  refreshBtn.addEventListener('click', loadProducts);
+
+  // initial load
+  loadProducts();
+
+})();
+</script>
+</body>
+</html>
