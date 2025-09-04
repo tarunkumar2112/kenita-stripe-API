@@ -23,7 +23,6 @@ export async function handler(event) {
     const memberId = params.memberId;
     const slug = params.slug || ""; // ✅ slug bhi aa gaya
 
-
     if (!productId || !memberId) {
       return {
         statusCode: 400,
@@ -56,7 +55,10 @@ export async function handler(event) {
     // 3. Get event name (fallback to product name)
     const eventName = product.metadata?.event_name || product.name || "";
 
-    // 4. Create checkout session
+    // 4. Get product image (first image only)
+    const productImage = product.images?.length ? product.images[0] : "";
+
+    // 5. Create checkout session
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -70,14 +72,14 @@ export async function handler(event) {
         "https://yoursite.netlify.app/success?session_id={CHECKOUT_SESSION_ID}",
       cancel_url: "https://yoursite.netlify.app/cancel",
       metadata: {
-  memberId: memberId,
-  productId: productId,
-  slug: slug,
-  points_awarded: pointsAwarded,
-  event_id: product.metadata?.event_id || "",
-  event_name: eventName,
-},
-
+        memberId: memberId,
+        productId: productId,
+        slug: slug,
+        points_awarded: pointsAwarded,
+        event_id: product.metadata?.event_id || "",
+        event_name: eventName,
+        product_image: productImage, // ✅ image bhi metadata me push
+      },
     });
 
     return {
