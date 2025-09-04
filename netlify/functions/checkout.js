@@ -21,6 +21,8 @@ export async function handler(event) {
     const params = event.queryStringParameters;
     const productId = params.productId;
     const memberId = params.memberId;
+    const slug = params.slug || ""; // ✅ slug bhi aa gaya
+
 
     if (!productId || !memberId) {
       return {
@@ -68,12 +70,14 @@ export async function handler(event) {
         "https://yoursite.netlify.app/success?session_id={CHECKOUT_SESSION_ID}",
       cancel_url: "https://yoursite.netlify.app/cancel",
       metadata: {
-        memberId: memberId,
-        productId: productId,
-        points_awarded: pointsAwarded,
-        event_id: product.metadata?.event_id || "",
-        event_name: eventName,
-      },
+  memberId: memberId,
+  productId: productId,
+  slug: slug,
+  points_awarded: pointsAwarded,
+  event_id: product.metadata?.event_id || "",
+  event_name: eventName,
+},
+
     });
 
     return {
