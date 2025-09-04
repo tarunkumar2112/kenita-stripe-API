@@ -69,8 +69,8 @@ export async function handler(event) {
         },
       ],
       success_url:
-        "https://yoursite.netlify.app/success?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "https://yoursite.netlify.app/cancel",
+        "https://minerva-b52935.webflow.io/the-ledger?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://minerva-b52935.webflow.io/",
       metadata: {
         memberId: memberId,
         productId: productId,
