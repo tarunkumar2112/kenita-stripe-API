@@ -45,7 +45,7 @@ export async function handler(event) {
 
     const customerId = customers.data[0].id;
 
-    // ✅ 2. Get invoices (expand only price, not product)
+    // ✅ 2. Get invoices (expand only price)
     const invoices = await stripe.invoices.list({
       customer: customerId,
       limit: 20,
@@ -58,11 +58,15 @@ export async function handler(event) {
     for (const invoice of invoices.data) {
       if (invoice.status === "paid") {
         for (const line of invoice.lines.data) {
+          if (!line.price) continue; // skip if no price
+
           const priceId = line.price.id;
           const productId =
             typeof line.price.product === "string"
-              ? line.price.product // ID is fine here
-              : line.price.product.id;
+              ? line.price.product
+              : line.price.product?.id;
+
+          if (!productId) continue; // skip if product missing
 
           if (
             MEMBERSHIP_PRODUCTS.some(
