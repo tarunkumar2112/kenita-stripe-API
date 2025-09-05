@@ -45,11 +45,11 @@ export async function handler(event) {
 
     const customerId = customers.data[0].id;
 
-    // ✅ 2. Get invoices (includes line items + products)
+    // ✅ 2. Get invoices (expand only price, not product)
     const invoices = await stripe.invoices.list({
       customer: customerId,
       limit: 20,
-      expand: ["data.lines.data.price.product"],
+      expand: ["data.lines.data.price"],
     });
 
     let isWhitelisted = false;
@@ -58,11 +58,11 @@ export async function handler(event) {
     for (const invoice of invoices.data) {
       if (invoice.status === "paid") {
         for (const line of invoice.lines.data) {
+          const priceId = line.price.id;
           const productId =
             typeof line.price.product === "string"
-              ? line.price.product
+              ? line.price.product // ID is fine here
               : line.price.product.id;
-          const priceId = line.price.id;
 
           if (
             MEMBERSHIP_PRODUCTS.some(
