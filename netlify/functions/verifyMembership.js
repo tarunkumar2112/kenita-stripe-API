@@ -39,7 +39,7 @@ export async function handler(event) {
       return {
         statusCode: 200,
         headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({ result: "no" }),
+        body: JSON.stringify({ result: "no", purchases: [] }),
       };
     }
 
@@ -53,12 +53,13 @@ export async function handler(event) {
     });
 
     let isWhitelisted = false;
+    let purchases = [];
 
-    // ✅ 3. Check purchased productId + priceId against whitelist
+    // ✅ 3. Collect all purchased product+price
     for (const invoice of invoices.data) {
       if (invoice.status === "paid") {
         for (const line of invoice.lines.data) {
-          if (!line.price) continue; // skip if no price
+          if (!line.price) continue;
 
           const priceId = line.price.id;
           const productId =
@@ -66,7 +67,9 @@ export async function handler(event) {
               ? line.price.product
               : line.price.product?.id;
 
-          if (!productId) continue; // skip if product missing
+          if (!productId) continue;
+
+          purchases.push({ productId, priceId });
 
           if (
             MEMBERSHIP_PRODUCTS.some(
@@ -74,17 +77,19 @@ export async function handler(event) {
             )
           ) {
             isWhitelisted = true;
-            break;
           }
         }
       }
-      if (isWhitelisted) break;
     }
 
     return {
       statusCode: 200,
       headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ result: isWhitelisted ? "yes" : "no" }),
+      body: JSON.stringify({
+        email,
+        result: isWhitelisted ? "yes" : "no",
+        purchases, // ✅ debug: all product+price found for this email
+      }),
     };
   } catch (err) {
     console.error("verifyMembership error:", err);
