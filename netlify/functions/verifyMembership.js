@@ -5,9 +5,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // ✅ Hardcoded Stripe product+price whitelist
 const MEMBERSHIP_PRODUCTS = [
-  { productId: "prod_ABC123", priceId: "price_123ABC" },
-  { productId: "prod_DEF456", priceId: "price_456DEF" },
-  { productId: "prod_GHI789", priceId: "price_789GHI" },
+  { productId: "prod_SuRAk7TCPQ8vcL", priceId: "price_1RycHqEDE4JLcHx3GZGWw4cH" },
+  { productId: "prod_SuR95V0Lq7jbTs", priceId: "price_1RycHcEDE4JLcHx3knyZx3Mi" },
 ];
 
 export async function handler(event) {
