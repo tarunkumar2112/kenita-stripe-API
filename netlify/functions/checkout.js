@@ -21,7 +21,7 @@ export async function handler(event) {
     const params = event.queryStringParameters;
     const productId = params.productId;
     const memberId = params.memberId;
-    const slug = params.slug || ""; // ✅ slug bhi aa gaya
+    const slug = params.slug || "";
 
     if (!productId || !memberId) {
       return {
@@ -49,19 +49,15 @@ export async function handler(event) {
         ? product.default_price
         : product.default_price.id;
 
-    // 2. Extract points from metadata (fallback to 0)
+    // 2. Extract points + event data
     const pointsAwarded = product.metadata?.points_awarded || "0";
-
-    // 3. Get event name (fallback to product name)
     const eventName = product.metadata?.event_name || product.name || "";
-
-    // 4. Get product image (first image only)
     const productImage = product.images?.length ? product.images[0] : "";
 
-    // 5. Create checkout session
+    // 3. Create checkout session
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      payment_method_types: ["card"],
+      payment_method_types: ["card"], // Apple Pay, Google Pay, Link piggyback here
       line_items: [
         {
           price: priceId,
@@ -69,16 +65,20 @@ export async function handler(event) {
         },
       ],
       success_url:
-        "https://minerva-b52935.webflow.io/the-ledger?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "https://minerva-b52935.webflow.io/",
-      metadata: {
-        memberId: memberId,
-        productId: productId,
-        slug: slug,
-        points_awarded: pointsAwarded,
-        event_id: product.metadata?.event_id || "",
-        event_name: eventName,
-        product_image: productImage, // ✅ image bhi metadata me push
+        "https://members.minervaartsclub.com/the-ledger?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://members.minervaartsclub.com/",
+
+      // ✅ Store metadata at the PaymentIntent level
+      payment_intent_data: {
+        metadata: {
+          memberId,
+          productId,
+          slug,
+          points_awarded: pointsAwarded,
+          event_id: product.metadata?.event_id || "",
+          event_name: eventName,
+          product_image: productImage,
+        },
       },
     });
 
